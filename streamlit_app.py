@@ -1,37 +1,37 @@
 import pandas as pd
 import streamlit as st
-import plotly.express as px
+from textblob import TextBlob
+import nltk
+nltk.download('punkt')
 
-# Title
-st.title("Sentiment Analysis Dashboard for Valuation Methodology Survey")
-
-# Load data from Google Sheet as CSV
+# Load Google Sheet
 sheet_url = "https://docs.google.com/spreadsheets/d/1uIKALZidjfcFRd2ph9fDch4-upR4QQxf30i70H4gtOU/export?format=csv"
 df = pd.read_csv(sheet_url)
 
-# Rename or alias columns for use
-df['Education Level'] = df['3.       What is your highest level of education?']
-df['Country'] = df['1.       In which country are you registered to practice?']
-df['Sentiment'] = df['vader_sentiment']
+# Apply sentiment analysis to Q8 and Q9
+def get_sentiment(text):
+    if pd.isna(text):
+        return 0
+    return TextBlob(str(text)).sentiment.polarity
 
-# Sidebar Filter
-group_col = st.sidebar.selectbox("Group sentiment by:", ['Education Level', 'Country'])
+df['Q8_Sentiment'] = df['8.       What steps, in your opinion, can be taken to promote the adoption of advanced valuation methods in your country’s valuations?'].apply(get_sentiment)
+df['Q9_Sentiment'] = df['9.       Do you have any additional comments on advanced valuation methodologies and their adoption in your country of practice?'].apply(get_sentiment)
 
-# Bar Chart
-grouped = df.groupby([group_col, 'Sentiment']).size().reset_index(name='Count')
-fig_bar = px.bar(grouped, x=group_col, y='Count', color='Sentiment',
-                 title=f"Sentiment by {group_col}", barmode='group')
-st.plotly_chart(fig_bar, use_container_width=True)
+# Average sentiment score
+df['Sentiment'] = df[['Q8_Sentiment', 'Q9_Sentiment']].mean(axis=1)
 
-# Pie Chart
-sentiment_counts = df['Sentiment'].value_counts().reset_index()
-sentiment_counts.columns = ['Sentiment', 'Count']
-fig_pie = px.pie(sentiment_counts, names='Sentiment', values='Count',
-                 title="Overall Sentiment Distribution")
-st.plotly_chart(fig_pie, use_container_width=True)
+# Show dashboard
+st.title("📊 Sentiment Analysis Dashboard for Valuation Methodology Survey")
 
-# Show raw data
-if st.checkbox("Show raw data"):
-    st.write(df[['Country', 'Education Level', 'Sentiment',
+st.write("### Average Sentiment Score by Education Level")
+st.bar_chart(df.groupby("3.       What is your highest level of education?")['Sentiment'].mean())
+
+st.write("### Average Sentiment Score by Country")
+st.bar_chart(df.groupby("1.       In which country are you registered to practice?")['Sentiment'].mean())
+
+st.write("### Raw Data Preview")
+st.dataframe(df[['1.       In which country are you registered to practice?', 
+                 '3.       What is your highest level of education?',
                  '8.       What steps, in your opinion, can be taken to promote the adoption of advanced valuation methods in your country’s valuations?',
-                 '9.       Do you have any additional comments on advanced valuation methodologies and their adoption in your country of practice?']])
+                 '9.       Do you have any additional comments on advanced valuation methodologies and their adoption in your country of practice?',
+                 'Sentiment']])
